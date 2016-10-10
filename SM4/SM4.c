@@ -70,26 +70,67 @@ void generateSubRoundKey(uint64_t*,uint32_t*);
 int main()
 {
     //key schedule
-    uint64_t mainKey[2];
+    uint64_t mainKey[2]={0x0123456789abcdef,0xfedcba9876543210};
     uint32_t subRoundKey[32];
     generateSubRoundKey(mainKey,subRoundKey);
+    for(int i=0;i<32;i++)
+        printf("rk[%d]=%#x\n",i,subRoundKey[i]);
     
-    uint64_t plainText[2];
-    uint64_t cipherText[2];
+    uint64_t plainText[2]={0x0123456789abcdef,0xfedcba9876543210};
 
+    uint64_t cipherText[2];
+    uint64_t plainText1[2];
     process(ENCRYPT,ROUND,subRoundKey,plainText,cipherText);
     printf("The Cipher is : %#lx%#lx\n",cipherText[0],cipherText[1]);
  
-    process(DECRYPT,ROUND,subRoundKey,cipherText,plainText);
-    printf("The Plain is : %#lx%#lx\n",plainText[0],plainText[1]);
+    process(DECRYPT,ROUND,subRoundKey,cipherText,plainText1);
+    printf("The Plain is : %#lx%#lx\n",plainText1[0],plainText1[1]);
     
     return 0;
 }
 void generateSubRoundKey(uint64_t mainKey[2],uint32_t subRoundKey[32])
 {
+    uint32_t T1(uint32_t);
+    uint32_t FK[4]={0xa3b1bac6,0x56aa3350,0x677d9197,0xb27022dc};
+    uint32_t CK[32]=
+    {
+        0x00070e15,0x1c232a31,0x383f464d,0x545b6269,
+        0x70777e85,0x8c939aa1,0xa8afb6bd,0xc4cbd2d9,
+        0xe0e7eef5,0xfc030a11,0x181f262d,0x343b4249,
+        0x50575e65,0x6c737a81,0x888f969d,0xa4abb2b9,
+        0xc0c7ced5,0xdce3eaf1,0xf8ff060d,0x141b2229,
+        0x30373e45,0x4c535a61,0x686f767d,0x848b9299,
+        0xa0a7aeb5,0xbcc3cad1,0xd8dfe6ed,0xf4fb0209,
+        0x10171e25,0x2c333a41,0x484f565d,0x646b7279
+    };
+    uint32_t K[4];
+    K[0] = ((mainKey[0]>>32) & 0xffffffff) ^ FK[0];
+    K[1] = ((mainKey[0]>>0)  & 0xffffffff) ^ FK[1];
+    K[2] = ((mainKey[1]>>32) & 0xffffffff) ^ FK[2];
+    K[3] = ((mainKey[1]>>0)  & 0xffffffff) ^ FK[3];
 
+    for(int round=0;round<32;round++)
+    {
+        subRoundKey[round]=K[0]^T1(K[1]^K[2]^K[3]^CK[round]);
+        K[0]=K[1];
+        K[1]=K[2];
+        K[2]=K[3];
+        K[3]=subRoundKey[round];
+    }
 }
 
+uint32_t T1(uint32_t input)
+{
+    uint8_t sbox(uint8_t);
+    uint32_t midState;
+    midState =  (sbox((input>>24) & 0xff) << 24)|
+                (sbox((input>>16) & 0xff) << 16)|
+                (sbox((input>>8)  & 0xff) << 8) |
+                (sbox((input>>0)  & 0xff) << 0);
+    return  midState^
+            ROTATE_LEFT(midState,32,13)^
+            ROTATE_LEFT(midState,32,23);
+}
 void process(int state,
              int round,
              uint32_t subRoundKey[32],
@@ -116,6 +157,7 @@ void process(int state,
         X[1]=X[2];
         X[2]=X[3];
         X[3]=midState;
+        printf("X[%d] = %#x\n",round,midState);
     }
     cipherText[0]= ((uint64_t)X[3]<<32) | X[2];
     cipherText[1]= ((uint64_t)X[1]<<32) | X[0];
